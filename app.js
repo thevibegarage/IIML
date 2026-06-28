@@ -1,44 +1,52 @@
+const STORAGE_KEY = 'task-planner-tasks';
+
 const statusEl = document.getElementById('status');
 const form = document.getElementById('add-form');
 const input = document.getElementById('task-input');
-const addBtn = document.getElementById('add-btn');
 const listEl = document.getElementById('task-list');
 const emptyEl = document.getElementById('empty-state');
 const statsEl = document.getElementById('stats');
 const activeCountEl = document.getElementById('active-count');
 const doneCountEl = document.getElementById('done-count');
+const filterBtns = document.querySelectorAll('[data-filter]');
+const clearBtn = document.getElementById('clear-done');
 
-let supabase = null;
 let tasks = [];
+let filter = 'all';
+
+function createId() {
+  return crypto.randomUUID();
+}
 
 function setStatus(message, isError = false) {
   statusEl.textContent = message;
   statusEl.classList.toggle('error', isError);
 }
 
-function initSupabase() {
-  if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
-    setStatus('Missing Supabase config. Copy config.example.js to config.js.', true);
-    addBtn.disabled = true;
-    input.disabled = true;
-    return false;
-  }
+function saveTasks() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+}
 
-  if (window.SUPABASE_URL.includes('YOUR_PROJECT') || window.SUPABASE_ANON_KEY.includes('YOUR_ANON')) {
-    setStatus('Update config.js with your Supabase URL and anon key.', true);
-    addBtn.disabled = true;
-    input.disabled = true;
-    return false;
+function loadTasks() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    tasks = saved ? JSON.parse(saved) : [];
+  } catch {
+    tasks = [];
   }
+}
 
-  supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
-  return true;
+function visibleTasks() {
+  if (filter === 'active') return tasks.filter((t) => !t.completed);
+  if (filter === 'done') return tasks.filter((t) => t.completed);
+  return tasks;
 }
 
 function renderTasks() {
+  const shown = visibleTasks();
   listEl.innerHTML = '';
 
-  tasks.forEach((task) => {
+  shown.forEach((task) => {
     const li = document.createElement('li');
     li.className = `task-item${task.completed ? ' done' : ''}`;
     li.dataset.id = task.id;
@@ -67,83 +75,61 @@ function renderTasks() {
   const active = tasks.filter((t) => !t.completed).length;
   const done = tasks.filter((t) => t.completed).length;
 
-  emptyEl.hidden = tasks.length > 0;
+  emptyEl.hidden = shown.length > 0;
+  emptyEl.textContent =
+    tasks.length === 0
+      ? 'No tasks yet. Add one above.'
+      : filter === 'active'
+        ? 'No active tasks. Nice work.'
+        : filter === 'done'
+          ? 'No completed tasks yet.'
+          : 'No tasks yet. Add one above.';
+
   statsEl.hidden = tasks.length === 0;
   activeCountEl.textContent = active;
   doneCountEl.textContent = done;
+  clearBtn.hidden = done === 0;
+
+  filterBtns.forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.filter === filter);
+  });
 }
 
-async function loadTasks() {
-  setStatus('Loading tasks…');
-
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('id, title, completed, created_at')
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    setStatus(`Failed to load tasks: ${error.message}`, true);
-    return;
-  }
-
-  tasks = data;
-  renderTasks();
-  setStatus('');
-}
-
-async function addTask(title) {
+function addTask(title) {
   const trimmed = title.trim();
   if (!trimmed) return;
 
-  addBtn.disabled = true;
-  setStatus('Saving…');
+  tasks.push({
+    id: createId(),
+    title: trimmed,
+    completed: false,
+    created_at: new Date().toISOString(),
+  });
 
-  const { data, error } = await supabase
-    .from('tasks')
-    .insert({ title: trimmed, completed: false })
-    .select('id, title, completed, created_at')
-    .single();
-
-  addBtn.disabled = false;
-
-  if (error) {
-    setStatus(`Failed to add task: ${error.message}`, true);
-    return;
-  }
-
-  tasks.push(data);
+  saveTasks();
   renderTasks();
-  setStatus('');
   input.value = '';
   input.focus();
 }
 
-async function toggleTask(id, completed) {
-  const { error } = await supabase
-    .from('tasks')
-    .update({ completed })
-    .eq('id', id);
-
-  if (error) {
-    setStatus(`Failed to update task: ${error.message}`, true);
-    await loadTasks();
-    return;
-  }
-
+function toggleTask(id, completed) {
   const task = tasks.find((t) => t.id === id);
-  if (task) task.completed = completed;
+  if (!task) return;
+
+  task.completed = completed;
+  saveTasks();
   renderTasks();
 }
 
-async function deleteTask(id) {
-  const { error } = await supabase.from('tasks').delete().eq('id', id);
-
-  if (error) {
-    setStatus(`Failed to delete task: ${error.message}`, true);
-    return;
-  }
-
+function deleteTask(id) {
   tasks = tasks.filter((t) => t.id !== id);
+  saveTasks();
+  renderTasks();
+}
+
+function clearCompleted() {
+  tasks = tasks.filter((t) => !t.completed);
+  saveTasks();
   renderTasks();
 }
 
@@ -152,6 +138,14 @@ form.addEventListener('submit', (e) => {
   addTask(input.value);
 });
 
-if (initSupabase()) {
-  loadTasks();
-}
+filterBtns.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    filter = btn.dataset.filter;
+    renderTasks();
+  });
+});
+
+clearBtn.addEventListener('click', clearCompleted);
+
+loadTasks();
+renderTasks();

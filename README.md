@@ -1,24 +1,24 @@
 # Task Planner
 
-A simple one-page task planner that saves tasks to Supabase.
+A simple one-page task planner. Frontend-only for now — tasks are saved in your browser via localStorage. Supabase backend coming later.
 
-## Setup
+## Run locally
 
-1. Create a [Supabase](https://supabase.com) project.
-2. In the SQL Editor, run the script in `supabase/schema.sql`.
-3. Copy your project URL and anon key from **Project Settings → API**.
-4. Copy `config.example.js` to `config.js` and paste your credentials:
+Open `index.html` in a browser, or serve the folder:
 
-```js
-window.SUPABASE_URL = 'https://your-project.supabase.co';
-window.SUPABASE_ANON_KEY = 'your-anon-key';
+```bash
+python3 -m http.server 8080
 ```
 
-5. Open `index.html` in a browser (or serve the folder with any static server).
+Then visit http://localhost:8080
 
 ## Features
 
-- Add tasks
-- Mark tasks complete
-- Delete tasks
-- Tasks persist in Supabase
+- Add, complete, and delete tasks
+- Filter by All / Active / Done
+- Clear completed tasks
+- Persists in localStorage
+
+## Supabase (later)
+
+SQL schema is ready in `supabase/schema.sql`. When you're ready to connect the backend, we'll swap localStorage for Supabase in `app.js`.
